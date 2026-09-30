@@ -22,7 +22,11 @@ from dataclasses import dataclass, field, asdict
 
 import torch
 import torch.nn as nn
-from torch.amp import autocast, GradScaler
+from torch.amp import autocast
+try:
+    from torch.amp import GradScaler
+except ImportError:
+    from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader, Subset
 
 from craft_v2.dataset import AntiUAVFrameDatasetV2
@@ -347,7 +351,10 @@ def train(cfg: TrainConfig, resume: str = None):
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
     scheduler = build_scheduler(optimizer, cfg)
-    scaler = GradScaler(device="cuda", enabled=device == "cuda")
+    try:
+        scaler = GradScaler(device="cuda", enabled=device == "cuda")
+    except TypeError:
+        scaler = GradScaler(enabled=device == "cuda")
 
     # --- Resume ---
     start_epoch  = 1
