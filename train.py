@@ -67,7 +67,8 @@ class TrainConfig:
 
     # Data loading
     preload:  bool = False   # load all frames into RAM at startup (~46 GB)
-    modality: str  = "both"  # "both" | "rgb" | "ir" — unimodal ablation
+    modality:     str  = "both"  # "both" | "rgb" | "ir" — unimodal ablation
+    use_convnext: bool = False
 
     # Logging
     log_every: int = 50
@@ -335,7 +336,7 @@ def train(cfg: TrainConfig, resume: str = None):
     )
 
     # --- Model + loss ---
-    model = CRAFTv2(ch=64).to(device)
+    model = CRAFTv2(ch=64, use_convnext=cfg.use_convnext).to(device)
     criterion = CRAFTv2Loss(
         w_ag=cfg.w_ag, w_al=cfg.w_al, w_m=cfg.w_m,
         w_f=cfg.w_f,   w_det=cfg.w_det,
@@ -480,6 +481,8 @@ def parse_args():
     p.add_argument("--modality",      type=str, default="both",
                    choices=["both", "rgb", "ir"],
                    help="Unimodal ablation: zero out the unused modality")
+    p.add_argument("--use-convnext",  action="store_true",
+                   help="Use ConvNeXt-Tiny backbone (run10+)")
     return p.parse_args()
 
 
@@ -513,6 +516,7 @@ if __name__ == "__main__":
             setattr(cfg, k, v)
     if args.preload:
         cfg.preload = True
-    cfg.modality = args.modality
+    cfg.modality     = args.modality
+    cfg.use_convnext = args.use_convnext
 
     train(cfg, resume=args.resume)
