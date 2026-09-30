@@ -11,18 +11,30 @@ from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
 
 
 # ---------------------------------------------------------------------------
-# Stage 1: SharedStem — ConvNeXt-Tiny backbone (stage 0+1, stride 4, 96→64ch)
+# Stage 1: SharedStem — ConvNeXt-Tiny backbone (stride-2+2 + stage-1 blocks, 96→64ch)
 # ---------------------------------------------------------------------------
 
 def _make_convnext_stem(out_ch=64):
     """
-    ConvNeXt-Tiny features[0] = patchify stem (4×4 stride-4 conv + LayerNorm)
-    ConvNeXt-Tiny features[1] = first ConvNeXt stage (3 blocks, 96ch)
+    Replace ConvNeXt stride-4 patchify with stride-2 + stride-2 to preserve
+    small object features. ConvNeXt stage-1 blocks are kept for rich features.
     Output: 96ch @ H/4 × W/4  →  projected to out_ch
     """
     backbone = convnext_tiny(weights=ConvNeXt_Tiny_Weights.IMAGENET1K_V1)
+    # stride-2 conv replaces the original stride-4 patchify
+    stride2a = nn.Sequential(
+        nn.Conv2d(3, 96, kernel_size=3, stride=2, padding=1, bias=False),
+        nn.BatchNorm2d(96),
+        nn.GELU(),
+    )
+    stride2b = nn.Sequential(
+        nn.Conv2d(96, 96, kernel_size=3, stride=2, padding=1, bias=False),
+        nn.BatchNorm2d(96),
+        nn.GELU(),
+    )
     stem = nn.Sequential(
-        backbone.features[0],   # patchify: 4×4 conv stride 4 + LayerNorm
+        stride2a,
+        stride2b,
         backbone.features[1],   # stage 1: 3 ConvNeXt blocks, 96ch
     )
     proj = nn.Sequential(
