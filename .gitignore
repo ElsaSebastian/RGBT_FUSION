@@ -1,0 +1,17 @@
+# Checkpoints
+runs/*/best.pt
+runs/*/latest.pt
+
+# Large output files
+runs/*/detection_results.json
+outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Data (never push)
+data/
+frames/
