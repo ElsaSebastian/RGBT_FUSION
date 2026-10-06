@@ -357,7 +357,7 @@ class DetectionHead(nn.Module):
         p3_boxes, p3_scores = self.p3_head(f_fused, stride=4)
 
         # P2: upsample to 160×160 (stride 2)
-        p2 = F.interpolate(f_fused, scale_factor=2, mode='bilinear', align_corners=False)
+        p2 = F.interpolate(f_fused.float(), scale_factor=2, mode='bilinear', align_corners=False).to(f_fused.dtype)
         p2 = self.lateral(p2)
         p2_boxes, p2_scores = self.p2_head(p2, stride=2)
 
