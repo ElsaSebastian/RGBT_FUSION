@@ -238,7 +238,8 @@ def run_epoch(model, loader, criterion, optimizer, scaler, device, cfg, epoch,
                 rgb      = torch.zeros_like(rgb)
                 rgb_mask = torch.zeros_like(rgb_mask)
 
-            with autocast(device_type=device, dtype=torch.bfloat16,
+            amp_dtype = torch.bfloat16 if device == "cuda" and torch.cuda.is_bf16_supported() else torch.float16
+            with autocast(device_type=device, dtype=amp_dtype,
                           enabled=device == "cuda"):
                 model_out = model(rgb, ir, rgb_mask=rgb_mask, ir_mask=ir_mask)
                 gt = {"box_vis": box_vis, "box_ir": box_ir, "exist": exist}
