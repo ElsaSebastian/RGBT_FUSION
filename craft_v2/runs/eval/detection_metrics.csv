@@ -1,0 +1,2 @@
+checkpoint,n_seqs,n_frames,mAP50,mAP50_95,AP_small,AP_medium,AP_large,AP_OV,AP_OC,AP_FM,AP_SV,AP_LI,AP_TC,AP_LR
+craft_v2/runs/run08/best.pt,91,85374,31.34,10.01,1.77,41.8,19.35,29.79,51.8,26.6,23.84,40.71,22.64,25.41

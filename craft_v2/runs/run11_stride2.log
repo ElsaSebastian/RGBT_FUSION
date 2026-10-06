@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "/usr/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/home/elsas/msdn/craft_v2/train.py", line 522, in <module>
+    train(cfg, resume=args.resume)
+  File "/home/elsas/msdn/craft_v2/train.py", line 339, in train
+    model = CRAFTv2(ch=64, use_convnext=cfg.use_convnext).to(device)
+  File "/home/elsas/Anti-UAV/mamba/anti-uav/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1174, in to
+    return self._apply(convert)
+  File "/home/elsas/Anti-UAV/mamba/anti-uav/lib/python3.8/site-packages/torch/nn/modules/module.py", line 780, in _apply
+    module._apply(fn)
+  File "/home/elsas/Anti-UAV/mamba/anti-uav/lib/python3.8/site-packages/torch/nn/modules/module.py", line 780, in _apply
+    module._apply(fn)
+  File "/home/elsas/Anti-UAV/mamba/anti-uav/lib/python3.8/site-packages/torch/nn/modules/module.py", line 780, in _apply
+    module._apply(fn)
+  [Previous line repeated 1 more time]
+  File "/home/elsas/Anti-UAV/mamba/anti-uav/lib/python3.8/site-packages/torch/nn/modules/module.py", line 805, in _apply
+    param_applied = fn(param)
+  File "/home/elsas/Anti-UAV/mamba/anti-uav/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1160, in convert
+    return t.to(
+RuntimeError: CUDA error: out of memory
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Device     : cuda
+Output dir : craft_v2/runs/run11_stride2
+Train frames: 149,528  |  Val frames: 61,999

@@ -1,0 +1,21 @@
+═══════════════════════════════════════════
+CRAFT-v2 Detection Results — Anti-UAV300
+Checkpoint: craft_v2/runs/run08/best.pt
+Test sequences: 91
+Total frames: 85,374
+═══════════════════════════════════════════
+mAP@0.5         :  31.3%
+mAP@0.5:0.95    :  10.0%
+AP-Small        :   1.8%
+AP-Medium       :  41.8%
+AP-Large        :  19.3%
+
+Per-attribute AP@0.5:
+  OV  :  29.8%
+  OC  :  51.8%
+  FM  :  26.6%
+  SV  :  23.8%
+  LI  :  40.7%
+  TC  :  22.6%
+  LR  :  25.4%
+═══════════════════════════════════════════
