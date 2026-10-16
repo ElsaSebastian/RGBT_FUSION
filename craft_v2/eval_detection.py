@@ -418,6 +418,7 @@ def evaluate(
     # --- Overall mAP ---
     print("Computing metrics …")
     map50     = compute_map(predictions, ground_truths, iou_threshold=0.5)
+    map75     = compute_map(predictions, ground_truths, iou_threshold=0.75)
     map50_95  = compute_map_range(predictions, ground_truths, 0.5, 0.95, 0.05)
 
     # --- Size-split AP (original pixel space, AP@0.5) ---
@@ -469,6 +470,7 @@ def evaluate(
         "n_seqs":     n_seqs,
         "n_frames":   total_frames,
         "map50":      map50,
+        "map75":      map75,
         "map50_95":   map50_95,
         "ap_small":   ap_small,
         "ap_medium":  ap_medium,
@@ -482,7 +484,7 @@ def evaluate(
     # detection_metrics.csv
     csv_path = os.path.join(output_dir, "detection_metrics.csv")
     csv_cols  = (["checkpoint", "n_seqs", "n_frames",
-                  "mAP50", "mAP50_95", "AP_small", "AP_medium", "AP_large"]
+                  "mAP50", "mAP75", "mAP50_95", "AP_small", "AP_medium", "AP_large"]
                  + [f"AP_{a}" for a in ATTRIBUTES])
     with open(csv_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=csv_cols)
@@ -492,6 +494,7 @@ def evaluate(
             "n_seqs":     n_seqs,
             "n_frames":   total_frames,
             "mAP50":      round(map50    * 100, 2),
+            "mAP75":      round(map75    * 100, 2),
             "mAP50_95":   round(map50_95 * 100, 2),
             "AP_small":   round(ap_small  * 100, 2),
             "AP_medium":  round(ap_medium * 100, 2),
@@ -514,6 +517,7 @@ def evaluate(
         f"Total frames: {total_frames:,}",
         "═" * 43,
         f"mAP@0.5         : {pct(map50)}",
+        f"mAP@0.75        : {pct(map75)}",
         f"mAP@0.5:0.95    : {pct(map50_95)}",
         f"AP-Small        : {pct(ap_small)}",
         f"AP-Medium       : {pct(ap_medium)}",
