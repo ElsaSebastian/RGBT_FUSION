@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import os
+import time
 from collections import defaultdict
 
 import torch
@@ -187,6 +188,50 @@ def compute_map_range(predictions, ground_truths,
 
     aps = [compute_map(predictions, ground_truths, thr) for thr in thresholds]
     return sum(aps) / len(aps) if aps else 0.0
+
+
+def compute_precision_recall_f1(predictions, ground_truths, iou_threshold=0.5):
+    """Best F1, and the Precision/Recall at that operating point."""
+    # collect all scores and match flags (same logic as compute_map)
+    gt_by_frame = defaultdict(list)
+    for g in ground_truths:
+        if g["exist"] == 1:
+            gt_by_frame[(g["seq_name"], g["frame_idx"])].append(g["box"])
+
+    n_gt = sum(len(v) for v in gt_by_frame.values())
+    if n_gt == 0:
+        return 0.0, 0.0, 0.0
+
+    preds_sorted = sorted(predictions, key=lambda p: p["score"], reverse=True)
+    matched = []
+    used = defaultdict(set)
+    for p in preds_sorted:
+        key = (p["seq_name"], p["frame_idx"])
+        gts = gt_by_frame.get(key, [])
+        best_iou, best_j = 0.0, -1
+        for j, gbox in enumerate(gts):
+            if j in used[key]:
+                continue
+            iou = iou_xywh(p["box"], gbox)
+            if iou > best_iou:
+                best_iou, best_j = iou, j
+        if best_iou >= iou_threshold and best_j >= 0:
+            used[key].add(best_j)
+            matched.append(1)
+        else:
+            matched.append(0)
+
+    best_f1, best_p, best_r = 0.0, 0.0, 0.0
+    tp = 0
+    for i, m in enumerate(matched):
+        tp += m
+        fp = (i + 1) - tp
+        p  = tp / (tp + fp + 1e-9)
+        r  = tp / (n_gt + 1e-9)
+        f1 = 2 * p * r / (p + r + 1e-9)
+        if f1 > best_f1:
+            best_f1, best_p, best_r = f1, p, r
+    return best_p, best_r, best_f1
 
 
 # ---------------------------------------------------------------------------
@@ -410,10 +455,15 @@ def evaluate(
 
     # --- Inference ---
     print("Running inference …")
+    t0 = time.time()
     predictions, ground_truths = run_inference(
         model, loader, device, conf_thresh, nms_iou, top_k
     )
+    elapsed = time.time() - t0
+    total_infer_frames = len(test_ds)
+    fps = total_infer_frames / elapsed if elapsed > 0 else 0.0
     print(f"  Predictions: {len(predictions):,}  |  GT frames: {len(ground_truths):,}")
+    print(f"  Inference time: {elapsed:.1f}s  |  FPS: {fps:.1f}")
 
     # --- Overall mAP ---
     print("Computing metrics …")
@@ -429,9 +479,13 @@ def evaluate(
     large_preds,  large_gts  = _filter_by_size(predictions, ground_truths,
                                                 9216, float("inf"))
 
-    ap_small  = compute_map(small_preds,  small_gts,  0.5) if small_gts  else 0.0
-    ap_medium = compute_map(medium_preds, medium_gts, 0.5) if medium_gts else 0.0
-    ap_large  = compute_map(large_preds,  large_gts,  0.5) if large_gts  else 0.0
+    ap_small     = compute_map(small_preds,  small_gts,  0.5)  if small_gts  else 0.0
+    ap_small_75  = compute_map(small_preds,  small_gts,  0.75) if small_gts  else 0.0
+    ap_medium    = compute_map(medium_preds, medium_gts, 0.5)  if medium_gts else 0.0
+    ap_large     = compute_map(large_preds,  large_gts,  0.5)  if large_gts  else 0.0
+
+    # --- Precision / Recall / F1 ---
+    precision, recall, f1 = compute_precision_recall_f1(predictions, ground_truths, 0.5)
 
     # --- Per-attribute AP@0.5 ---
     # Build seq → attr set
@@ -469,14 +523,19 @@ def evaluate(
         "checkpoint": checkpoint,
         "n_seqs":     n_seqs,
         "n_frames":   total_frames,
-        "map50":      map50,
-        "map75":      map75,
-        "map50_95":   map50_95,
-        "ap_small":   ap_small,
-        "ap_medium":  ap_medium,
-        "ap_large":   ap_large,
-        "attr_ap":    attr_ap,
-        "per_seq":    seq_results,
+        "map50":       map50,
+        "map75":       map75,
+        "map50_95":    map50_95,
+        "ap_small":    ap_small,
+        "ap_small_75": ap_small_75,
+        "ap_medium":   ap_medium,
+        "ap_large":    ap_large,
+        "precision":   precision,
+        "recall":      recall,
+        "f1":          f1,
+        "fps":         fps,
+        "attr_ap":     attr_ap,
+        "per_seq":     seq_results,
     }
     with open(os.path.join(output_dir, "detection_results.json"), "w") as f:
         json.dump(results_payload, f, indent=2)
@@ -484,7 +543,9 @@ def evaluate(
     # detection_metrics.csv
     csv_path = os.path.join(output_dir, "detection_metrics.csv")
     csv_cols  = (["checkpoint", "n_seqs", "n_frames",
-                  "mAP50", "mAP75", "mAP50_95", "AP_small", "AP_medium", "AP_large"]
+                  "mAP50", "mAP75", "mAP50_95",
+                  "AP_small", "AP_small_75", "AP_medium", "AP_large",
+                  "Precision", "Recall", "F1", "FPS"]
                  + [f"AP_{a}" for a in ATTRIBUTES])
     with open(csv_path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=csv_cols)
@@ -493,12 +554,17 @@ def evaluate(
             "checkpoint": checkpoint,
             "n_seqs":     n_seqs,
             "n_frames":   total_frames,
-            "mAP50":      round(map50    * 100, 2),
-            "mAP75":      round(map75    * 100, 2),
-            "mAP50_95":   round(map50_95 * 100, 2),
-            "AP_small":   round(ap_small  * 100, 2),
-            "AP_medium":  round(ap_medium * 100, 2),
-            "AP_large":   round(ap_large  * 100, 2),
+            "mAP50":       round(map50       * 100, 2),
+            "mAP75":       round(map75       * 100, 2),
+            "mAP50_95":    round(map50_95    * 100, 2),
+            "AP_small":    round(ap_small    * 100, 2),
+            "AP_small_75": round(ap_small_75 * 100, 2),
+            "AP_medium":   round(ap_medium   * 100, 2),
+            "AP_large":    round(ap_large    * 100, 2),
+            "Precision":   round(precision   * 100, 2),
+            "Recall":      round(recall      * 100, 2),
+            "F1":          round(f1          * 100, 2),
+            "FPS":         round(fps, 1),
         }
         for a in ATTRIBUTES:
             v = attr_ap[a]
@@ -519,9 +585,16 @@ def evaluate(
         f"mAP@0.5         : {pct(map50)}",
         f"mAP@0.75        : {pct(map75)}",
         f"mAP@0.5:0.95    : {pct(map50_95)}",
-        f"AP-Small        : {pct(ap_small)}",
+        f"AP-Small@0.5    : {pct(ap_small)}",
+        f"AP-Small@0.75   : {pct(ap_small_75)}",
         f"AP-Medium       : {pct(ap_medium)}",
         f"AP-Large        : {pct(ap_large)}",
+        "",
+        f"Precision (best F1): {pct(precision)}",
+        f"Recall    (best F1): {pct(recall)}",
+        f"F1 Score           : {pct(f1)}",
+        "",
+        f"FPS                : {fps:.1f}",
         "",
         "Per-attribute AP@0.5:",
     ]
