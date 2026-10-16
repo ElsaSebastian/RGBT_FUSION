@@ -604,7 +604,7 @@ def evaluate(
 
     txt_body = "\n".join(txt_lines)
     print("\n" + txt_body + "\n")
-    with open(os.path.join(output_dir, "detection_metrics.txt"), "w") as f:
+    with open(os.path.join(output_dir, "detection_metrics.txt"), "w", encoding="utf-8") as f:
         f.write(txt_body + "\n")
 
     print(f"Results saved to: {output_dir}")
