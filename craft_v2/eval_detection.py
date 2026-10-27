@@ -306,7 +306,10 @@ def run_inference(model, loader, device, conf_thresh, nms_iou, top_k):
             elif args.modality == "ir":
                 rgb = torch.zeros_like(rgb)
 
-            out = model(rgb, ir)
+            out = model(rgb, ir,
+                        ablate_no_align=args.no_align,
+                        ablate_no_msp=args.no_msp,
+                        ablate_no_deform=args.no_deform)
 
             pred_boxes  = out["boxes"]   # [B, 6400, 4]
             pred_scores = out["scores"]  # [B, 6400, 1]
@@ -634,6 +637,13 @@ def parse_args():
                    choices=["both", "rgb", "ir"])
     p.add_argument("--use-convnext",  action="store_true", default=False,
                    help="Use ConvNeXt-Tiny backbone (run10+); omit for run08/run09")
+    # ablation flags — eval-only, do not use during training
+    p.add_argument("--no-align",      action="store_true", default=False,
+                   help="Ablation: skip both MSPAlign and DeformAlign")
+    p.add_argument("--no-msp",        action="store_true", default=False,
+                   help="Ablation: skip MSPAlign only")
+    p.add_argument("--no-deform",     action="store_true", default=False,
+                   help="Ablation: skip DeformAlign only")
     return p.parse_args()
 
 
@@ -652,3 +662,5 @@ if __name__ == "__main__":
         nms_iou      = args.nms_iou,
         top_k        = args.top_k,
     )
+    # Note: ablation flags (--no-align, --no-msp, --no-deform) are read from
+    # args directly inside run_inference via the global args object.

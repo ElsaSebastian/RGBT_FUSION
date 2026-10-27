@@ -380,8 +380,14 @@ class CRAFTv2(nn.Module):
         self.hga_fuse    = HGAFuse(ch=ch)
         self.det_head    = DetectionHead(ch=ch)   # two-scale: P2+P3
 
-    def forward(self, rgb, ir, rgb_mask=None, ir_mask=None, verbose=False):
-        # rgb_mask / ir_mask: optional [B,1,80,80] padding masks from dataset
+    def forward(self, rgb, ir, rgb_mask=None, ir_mask=None, verbose=False,
+                ablate_no_msp=False, ablate_no_deform=False, ablate_no_align=False):
+        """
+        Ablation flags (eval-only, do not use during training):
+          ablate_no_align  — skip both MSPAlign and DeformAlign (raw features to fusion)
+          ablate_no_msp    — skip MSPAlign only (DeformAlign still runs)
+          ablate_no_deform — skip DeformAlign only (MSPAlign still runs)
+        """
         def _p(name, *tensors):
             if verbose:
                 for t in tensors:
@@ -391,14 +397,25 @@ class CRAFTv2(nn.Module):
         f_rgb, f_ir = self.stem(rgb, ir)
         _p("Stage1 SharedStem  f_rgb, f_ir", f_rgb, f_ir)
 
-        # Stage 2 — masks bypass SharedStem, zero padding before K/V pool
-        f_rgb_enh, f_ir_enh = self.msp_align(f_rgb, f_ir, rgb_mask=rgb_mask, ir_mask=ir_mask)
-        _p("Stage2 MSPAlign    f_rgb_enh, f_ir_enh", f_rgb_enh, f_ir_enh)
+        # Stage 2 — MSPAlign (skip if ablate_no_msp or ablate_no_align)
+        if ablate_no_align or ablate_no_msp:
+            f_rgb_enh, f_ir_enh = f_rgb, f_ir
+            _p("Stage2 MSPAlign    SKIPPED", f_rgb_enh, f_ir_enh)
+        else:
+            f_rgb_enh, f_ir_enh = self.msp_align(f_rgb, f_ir, rgb_mask=rgb_mask, ir_mask=ir_mask)
+            _p("Stage2 MSPAlign    f_rgb_enh, f_ir_enh", f_rgb_enh, f_ir_enh)
 
-        # Stage 3
-        f_rgb_aligned, f_ir_aligned, mask_rgb, mask_ir, offset_mag = self.deform_align(f_rgb_enh, f_ir_enh)
-        _p("Stage3 DeformAlign f_rgb_aligned, f_ir_aligned", f_rgb_aligned, f_ir_aligned)
-        _p("Stage3             mask_rgb, mask_ir", mask_rgb, mask_ir)
+        # Stage 3 — DeformAlign (skip if ablate_no_deform or ablate_no_align)
+        if ablate_no_align or ablate_no_deform:
+            f_rgb_aligned, f_ir_aligned = f_rgb_enh, f_ir_enh
+            mask_rgb = torch.zeros(rgb.shape[0], 1, f_rgb.shape[2], f_rgb.shape[3], device=rgb.device)
+            mask_ir  = torch.zeros_like(mask_rgb)
+            offset_mag = torch.tensor(0.0, device=rgb.device)
+            _p("Stage3 DeformAlign SKIPPED", f_rgb_aligned, f_ir_aligned)
+        else:
+            f_rgb_aligned, f_ir_aligned, mask_rgb, mask_ir, offset_mag = self.deform_align(f_rgb_enh, f_ir_enh)
+            _p("Stage3 DeformAlign f_rgb_aligned, f_ir_aligned", f_rgb_aligned, f_ir_aligned)
+            _p("Stage3             mask_rgb, mask_ir", mask_rgb, mask_ir)
 
         # Stage 4
         f_fused = self.hga_fuse(f_rgb_aligned, f_ir_aligned)
@@ -409,14 +426,14 @@ class CRAFTv2(nn.Module):
         _p("Stage5 DetHead     boxes, scores", boxes, scores)
 
         return {
-            "boxes":         boxes,          # [B, N, 4]  x,y,w,h in vis pixels
-            "scores":        scores,         # [B, N, 1]
-            "f_rgb_aligned": f_rgb_aligned,  # for L_ag / L_al
+            "boxes":         boxes,
+            "scores":        scores,
+            "f_rgb_aligned": f_rgb_aligned,
             "f_ir_aligned":  f_ir_aligned,
-            "f_fused":       f_fused,        # for L_f
-            "mask_rgb":      mask_rgb,       # for L_m
+            "f_fused":       f_fused,
+            "mask_rgb":      mask_rgb,
             "mask_ir":       mask_ir,
-            "offset_mag":    offset_mag,     # monitoring only — not a loss term
+            "offset_mag":    offset_mag,
         }
 
 
