@@ -449,7 +449,7 @@ def train(cfg: TrainConfig, resume: str = None):
             "l_m":        round(val_avg["l_m"],    6),
             "l_f":        round(val_avg["l_f"],    6),
             "l_det":      round(val_avg["l_det"],       6),
-            "offset_mag": round(train_avg["offset_mag"], 6),
+            "offset_mag": round(float(train_avg["offset_mag"]), 6),
             "lr":         round(lr_now, 8),
         })
         csv_file.flush()
