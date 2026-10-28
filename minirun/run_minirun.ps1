@@ -18,24 +18,24 @@ $COMMON = "--dataset-root `"$DATASET`" --frames-root `"$FRAMES`" " +
 
 # 1. Full pipeline (both modalities, all stages)
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --run-name minirun_full"
+    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --output-dir craft_v2/runs/minirun_full"
 
 Start-Sleep -Seconds 5
 
 # 2. RGB only
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --modality rgb --run-name minirun_rgb"
+    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --modality rgb --output-dir craft_v2/runs/minirun_rgb"
 
 Start-Sleep -Seconds 5
 
 # 3. IR only
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --modality ir --run-name minirun_ir"
+    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --modality ir --output-dir craft_v2/runs/minirun_ir"
 
 Start-Sleep -Seconds 5
 
 # 4. No alignment
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --no-align --run-name minirun_noalign"
+    "cd '$ROOT'; conda activate elsa; python -m craft_v2.train $COMMON --no-align --output-dir craft_v2/runs/minirun_noalign"
 
 Write-Host "4 minirun windows launched. Results in: craft_v2\runs\minirun_*"
