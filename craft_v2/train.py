@@ -44,7 +44,9 @@ class TrainConfig:
     dataset_root: str = ""
     frames_root:  str = ""
     output_dir:   str = "craft_v2/runs"
-    train_split:  str = "train"   # e.g. "mini_train" for the 1-frame-per-seq subset
+    train_split:  str = "train"
+    train_json:   str = ""   # override: direct path to train manifest json
+    val_json:     str = ""   # override: direct path to val manifest json
 
     # Data
     batch_size:          int  = 16
@@ -73,6 +75,8 @@ class TrainConfig:
     preload:  bool = False   # load all frames into RAM at startup (~46 GB)
     modality:     str  = "both"  # "both" | "rgb" | "ir" — unimodal ablation
     use_convnext: bool = False
+    no_align:     bool = False   # ablation: skip MSPAlign + DeformAlign
+    no_deform:    bool = False   # ablation: skip DeformAlign only
 
     # Logging
     log_every: int = 50
@@ -241,7 +245,9 @@ def run_epoch(model, loader, criterion, optimizer, scaler, device, cfg, epoch,
             amp_dtype = torch.bfloat16 if device == "cuda" and torch.cuda.is_bf16_supported() else torch.float16
             with autocast(device_type=device, dtype=amp_dtype,
                           enabled=device == "cuda"):
-                model_out = model(rgb, ir, rgb_mask=rgb_mask, ir_mask=ir_mask)
+                model_out = model(rgb, ir, rgb_mask=rgb_mask, ir_mask=ir_mask,
+                                  ablate_no_align=cfg.no_align,
+                                  ablate_no_deform=cfg.no_deform)
                 gt = {"box_vis": box_vis, "box_ir": box_ir, "exist": exist}
                 losses = criterion(model_out, gt)
 
@@ -291,8 +297,8 @@ def train(cfg: TrainConfig, resume: str = None):
 
     # --- Split JSONs ---
     val_split  = "val" if cfg.train_split == "train" else f"mini_val"
-    train_json = _make_split_json(cfg.dataset_root, cfg.train_split)
-    val_json   = _make_split_json(cfg.dataset_root, val_split)
+    train_json = cfg.train_json if cfg.train_json else _make_split_json(cfg.dataset_root, cfg.train_split)
+    val_json   = cfg.val_json   if cfg.val_json   else _make_split_json(cfg.dataset_root, val_split)
 
     # --- Datasets ---
     train_ds = AntiUAVFrameDatasetV2(
@@ -491,6 +497,14 @@ def parse_args():
                    help="Unimodal ablation: zero out the unused modality")
     p.add_argument("--use-convnext",  action="store_true",
                    help="Use ConvNeXt-Tiny backbone (run10+)")
+    p.add_argument("--no-align",      action="store_true",
+                   help="Ablation: skip MSPAlign + DeformAlign during training")
+    p.add_argument("--no-deform",     action="store_true",
+                   help="Ablation: skip DeformAlign only during training")
+    p.add_argument("--train-json",    type=str, default="",
+                   help="Direct path to train manifest json (overrides --train-split)")
+    p.add_argument("--val-json",      type=str, default="",
+                   help="Direct path to val manifest json")
     return p.parse_args()
 
 
@@ -526,5 +540,9 @@ if __name__ == "__main__":
         cfg.preload = True
     cfg.modality     = args.modality
     cfg.use_convnext = args.use_convnext
+    cfg.no_align     = args.no_align
+    cfg.no_deform    = args.no_deform
+    cfg.train_json   = args.train_json
+    cfg.val_json     = args.val_json
 
     train(cfg, resume=args.resume)
