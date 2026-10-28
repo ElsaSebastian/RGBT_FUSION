@@ -227,9 +227,14 @@ def _l_det(pred_boxes, pred_scores, box_vis, exist, stride=4,
         H = W = int(N ** 0.5)
         grid_centres = _build_grid_centres(H, W, stride, device)
 
-    # --- Score targets: all zeros, set closest-cell to 1 for exist=1 ---
+    # --- Score targets: radius-based positive assignment (FCOS-style) ---
+    # Cells within radius of GT centre are positive; top-k by distance kept.
+    # Radius = half the GT box diagonal, clamped to [1.5*stride, 6*stride].
     score_target = torch.zeros(B, N, 1, device=device)
     pos_indices  = []
+
+    # Determine stride from grid size
+    base_stride = 2 if N >= 30000 else 4
 
     exist_mask = exist.bool()
     for b in range(B):
@@ -238,11 +243,20 @@ def _l_det(pred_boxes, pred_scores, box_vis, exist, stride=4,
         gt = box_vis[b]
         gt_cx = gt[0] + gt[2] / 2
         gt_cy = gt[1] + gt[3] / 2
-        dists = (grid_centres[:, 0] - gt_cx).pow(2) + \
-                (grid_centres[:, 1] - gt_cy).pow(2)
-        cell  = dists.argmin().item()
-        score_target[b, cell, 0] = 1.0
-        pos_indices.append((b, cell))
+        gt_diag = (gt[2].pow(2) + gt[3].pow(2)).sqrt()
+        radius  = (gt_diag / 2).clamp(min=1.5 * base_stride, max=6 * base_stride)
+
+        dists = ((grid_centres[:, 0] - gt_cx).pow(2) +
+                 (grid_centres[:, 1] - gt_cy).pow(2)).sqrt()
+        in_radius = (dists <= radius).nonzero(as_tuple=True)[0]
+
+        if len(in_radius) == 0:
+            # fallback: closest single cell
+            in_radius = dists.argmin().unsqueeze(0)
+
+        for cell in in_radius.tolist():
+            score_target[b, cell, 0] = 1.0
+            pos_indices.append((b, cell))
 
     focal = _focal_loss(pred_scores, score_target,
                         alpha=focal_alpha, gamma=focal_gamma)

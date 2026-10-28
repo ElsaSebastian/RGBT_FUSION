@@ -325,8 +325,8 @@ class _ScaleHead(nn.Module):
         ys = (torch.arange(H, device=f.device) + 0.5) * stride
         gy, gx = torch.meshgrid(ys, xs, indexing='ij')
 
-        cx = gx + torch.tanh(reg[:, 0]) * stride
-        cy = gy + torch.tanh(reg[:, 1]) * stride
+        cx = gx + (torch.sigmoid(reg[:, 0]) - 0.5) * 2 * stride
+        cy = gy + (torch.sigmoid(reg[:, 1]) - 0.5) * 2 * stride
         bw = torch.exp(reg[:, 2].clamp(-4, 4)) * stride
         bh = torch.exp(reg[:, 3].clamp(-4, 4)) * stride
         x  = cx - bw / 2
